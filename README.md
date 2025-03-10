@@ -10,11 +10,12 @@ A robust BASH script that automates system updates on Linux servers while intell
 
 - **Cross-distribution compatibility**: Works with both apt-based (Debian/Ubuntu) and yum/dnf-based (RHEL/CentOS/Fedora) systems
 - **Intelligent update handling**: Automatically detects when updates are safe to apply
-- **Configuration preservation**: Always preserves existing configuration files
+- **Configuration preservation**: Always preserves existing config files
 - **Non-interactive operation**: Handles all prompts automatically for true unattended operation
 - **Admin notifications**: Sends email alerts when manual intervention is required
 - **Detailed logging**: Maintains comprehensive logs of all update activities
 - **Safe operation**: Never removes packages without admin approval
+- **Verbosity options**: Control output with verbose modes for troubleshooting
 
 ## Requirements
 
@@ -60,6 +61,32 @@ SMTP_SERVER="smtp.example.com"
 SMTP_PORT="587"
 SMTP_USER="notifications@example.com"
 SMTP_PASS="your_password_here"
+```
+
+## Usage
+
+### Basic Usage
+
+Run the script with no arguments for quiet operation (logs only to file):
+
+```bash
+sudo /usr/local/bin/auto-update.sh
+```
+
+### Verbose Mode
+
+Use the `-v` flag to see detailed output in the terminal:
+
+```bash
+sudo /usr/local/bin/auto-update.sh -v
+```
+
+### Very Verbose Mode
+
+Use the `-vv` flag for maximum verbosity (detailed terminal output and enhanced logging):
+
+```bash
+sudo /usr/local/bin/auto-update.sh -vv
 ```
 
 ## Setting Up Automated Runs
@@ -143,6 +170,22 @@ sudo systemctl start auto-update.timer
 3. If issues found → Sends email notification
 4. If no issues → Performs upgrade
 
+## Verbosity Levels
+
+The script supports three verbosity levels:
+
+| Mode | Flag | Description |
+|------|------|-------------|
+| Normal | (none) | Runs silently, logs to `/var/log/auto-update.log` |
+| Verbose | `-v` | Prints operation details to the terminal while running |
+| Very Verbose | `-vv` | Maximum detail in terminal output and enhanced logging |
+
+Verbosity modes help with:
+- Troubleshooting email notification issues
+- Debugging package manager problems
+- Testing before setting up automated runs
+- Observing exactly what the script is doing in real-time
+
 ## Configuration Options
 
 The script has several configurable parameters at the top:
@@ -177,18 +220,21 @@ When manual intervention is required, an email is sent with:
 2. Verify network connectivity to SMTP server
 3. Check if `curl` is installed
 4. Review logs for SMTP errors
+5. Run with `-v` flag to see detailed output
 
 ### Script Not Running from Cron
 
 1. Check cron logs: `grep CRON /var/log/syslog`
 2. Ensure script has proper permissions
 3. Check for PATH issues in the cron environment
+4. Try running with `-v` flag to identify issues
 
 ### Updates Not Being Applied
 
 1. Check `/var/log/auto-update.log` for errors
 2. Verify the script is detecting the correct package manager
 3. Check if the user running the script has sufficient permissions
+4. Run with `-vv` flag to get maximum diagnostic information
 
 ## Security Considerations
 
