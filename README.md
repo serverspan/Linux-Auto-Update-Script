@@ -259,5 +259,8 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 5. Submit a pull request
 
 ---
+© 2025 ENGINYRING. All rights reserved.  
 
-© 2025 ENGINYRING. All rights reserved.
+* * *
+
+[Web hosting](https://www.enginyring.com/en/webhosting) | [VPS hosting](https://www.enginyring.com/en/virtual-servers) | [Free DevOps tools](https://www.enginyring.com/tools)
