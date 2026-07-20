@@ -31,6 +31,12 @@ All notable changes to this project are documented here.
 - Removed the false-positive manual-intervention trigger caused by matching
   "Need to get ... of archives" (present in every normal upgrade).
 - `send_email` now reliably captures and reports curl's real exit code.
+- `send_email` now selects the SMTP URL scheme from the port (465 → `smtps://`
+  implicit TLS; 25/587 → `smtp://` + STARTTLS). The previous hard-coded
+  `smtps://` caused `curl: (35) wrong version number` on port 587. An explicit
+  `SMTP_SCHEME` override is also supported.
+- Email failures are now also printed to stderr so the underlying problem is not
+  buried in the log file.
 
 ### Changed
 - Strict mode (`set -uo pipefail`) for safer execution.
