@@ -230,6 +230,7 @@ it logs a reminder. The reboot status is included in summary emails.
 | `ADMIN_EMAIL` | Email address for notifications |
 | `SMTP_SERVER` | SMTP server for sending emails |
 | `SMTP_PORT` | SMTP port (usually 25, 465, or 587) |
+| `SMTP_SCHEME` | Optional; overrides the URL scheme. Auto-selected from port: `465` → `smtps://` (implicit TLS), `25`/`587` → `smtp://` + STARTTLS |
 | `SMTP_USER` | Username for SMTP authentication |
 | `SMTP_PASS` | Password for SMTP authentication |
 | `LOG_FILE` | Path to the log file (default: `/var/log/auto-update.log`) |

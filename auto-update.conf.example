@@ -12,6 +12,11 @@ ADMIN_EMAIL="admin@example.com"
 # SMTP server settings
 SMTP_SERVER="smtp.example.com"
 SMTP_PORT="587"
+# SMTP_SCHEME is optional. It is chosen automatically from SMTP_PORT:
+#   465 -> smtps:// (implicit TLS)
+#   25 / 587 -> smtp:// + STARTTLS (--ssl-reqd)
+# Set SMTP_SCHEME explicitly (e.g. "smtps://" or "smtp://") to override.
+# SMTP_SCHEME="smtp://"
 SMTP_USER="notifications@example.com"
 SMTP_PASS="your_password_here"
 

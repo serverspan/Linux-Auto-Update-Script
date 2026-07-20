@@ -224,6 +224,17 @@ send_email() {
 
   log "Sending email to $ADMIN_EMAIL with subject: $subject"
 
+  # Determine the URL scheme. Port 465 is implicit TLS (smtps://). Ports 25/587
+  # use plain SMTP with STARTTLS (smtp:// + --ssl-reqd). An explicit
+  # SMTP_SCHEME override wins if provided.
+  local scheme="${SMTP_SCHEME:-}"
+  if [ -z "$scheme" ]; then
+    case "$SMTP_PORT" in
+      465) scheme="smtps://" ;;
+      *)    scheme="smtp://" ;;
+    esac
+  fi
+
   {
     printf 'Subject: %s\n' "$subject"
     printf 'From: System Update <%s>\n' "$SMTP_USER"
@@ -232,7 +243,7 @@ send_email() {
     printf 'Content-Type: text/plain; charset=utf-8\n'
     printf '\n'
     printf '%s\n' "$body"
-  } | curl --url "smtps://$SMTP_SERVER:$SMTP_PORT" \
+  } | curl --url "${scheme}${SMTP_SERVER}:${SMTP_PORT}" \
               --ssl-reqd \
               --mail-from "$SMTP_USER" \
               --mail-rcpt "$ADMIN_EMAIL" \
@@ -247,6 +258,8 @@ send_email() {
     log "Email sent to $ADMIN_EMAIL"
   else
     log "Failed to send email to $ADMIN_EMAIL (curl exit code: $rc)" "ERROR"
+    # Surface the failure to stderr too, so it is not buried in the log file
+    echo "Error: failed to send notification email (curl exit code: $rc). Check SMTP_SERVER/SMTP_PORT/SMTP_SCHEME and credentials." >&2
   fi
   return $rc
 }
