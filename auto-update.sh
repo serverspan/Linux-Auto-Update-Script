@@ -135,6 +135,7 @@ log() {
   timestamp="$(date "+%Y-%m-%d %H:%M:%S")"
 
   # Always write to the log file
+  # shellcheck disable=SC2153 # LOG_FILE is assigned during config resolution above
   echo "[$timestamp] $level: $message" >> "$LOG_FILE"
 
   # If verbosity is at least 1, also output to terminal
@@ -285,9 +286,6 @@ reboot_required() {
   fi
   # RHEL/CentOS/Fedora: check for a running kernel older than the installed one
   if command -v yum >/dev/null 2>&1 || command -v dnf >/dev/null 2>&1; then
-    if [ -f /boot/vmlinuz-*"$(uname -r)" ]; then
-      : # current kernel present; deeper check below
-    fi
     # Compare running vs latest installed kernel safely
     local running
     running="$(uname -r)"
