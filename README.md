@@ -298,6 +298,10 @@ emails on every normal upgrade. This was fixed in 1.2.0 — upgrade to avoid it.
 
 This project is licensed under the MIT License - see the LICENSE file for details.
 
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md) for a versioned history of changes.
+
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
