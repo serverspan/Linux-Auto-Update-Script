@@ -294,6 +294,17 @@ emails on every normal upgrade. This was fixed in 1.2.0 — upgrade to avoid it.
 - Prefer environment variables or a secret manager over a plaintext file when possible.
 - The script never removes packages automatically; it only notifies and stops.
 
+## Testing
+
+The repository includes a [bats](https://github.com/bats-core/bats-core) test
+suite in `tests/` that mocks `apt`, `dnf`/`yum`, `curl`, and `flock` so it runs
+without root or a live package manager. A GitHub Actions workflow runs the suite
+(syntax check + shellcheck + bats) on every push and pull request.
+
+```bash
+bats tests/
+```
+
 ## License
 
 This project is licensed under the MIT License - see the LICENSE file for details.

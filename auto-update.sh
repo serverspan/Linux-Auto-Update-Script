@@ -106,7 +106,55 @@ for _v in "${_ENV_VARS[@]}"; do
 done
 unset _v _def _ENV_VARS _ENV_VAL
 
+# Normalize boolean config values to lowercase "true"/"false" for reliable comparison.
+# Accepts: true/false, TRUE/FALSE, True/False, 1/0, yes/no, on/off
+_bool_normalize() {
+  local var_name="$1"
+  local val="${!var_name}"
+  case "${val,,}" in
+    true|1|yes|on)  printf -v "$var_name" 'true' ;;
+    false|0|no|off) printf -v "$var_name" 'false' ;;
+    *)              # If it's something unexpected, default to false for safety
+                    printf -v "$var_name" 'false' ;;
+  esac
+}
+for _bv in AUTO_REBOOT NOTIFY_ON_SUCCESS DRY_RUN MAIL_SUMMARY; do
+  _bool_normalize "$_bv"
+done
+unset _bv _bool_normalize
+
 HOSTNAME="$(hostname)"
+
+#-------------------------------------------------------------------------------
+# Logging (defined early so they are available to the lock guard below)
+#-------------------------------------------------------------------------------
+log() {
+  local message="$1"
+  local level=${2:-"INFO"}
+  local timestamp
+  timestamp="$(date "+%Y-%m-%d %H:%M:%S")"
+
+  # Always write to the log file
+  echo "[$timestamp] $level: $message" >> "$LOG_FILE"
+
+  # If verbosity is at least 1, also output to terminal
+  if [ $VERBOSITY -ge 1 ]; then
+    echo "[$timestamp] $level: $message"
+  fi
+}
+
+# Function for verbose logging
+log_verbose() {
+  local message="$1"
+
+  if [ $VERBOSITY -ge 2 ]; then
+    log "$message" "VERBOSE"
+  elif [ $VERBOSITY -eq 1 ]; then
+    local timestamp
+    timestamp="$(date "+%Y-%m-%d %H:%M:%S")"
+    echo "[$timestamp] VERBOSE: $message"
+  fi
+}
 
 #-------------------------------------------------------------------------------
 # Argument parsing
@@ -149,44 +197,20 @@ done
 
 #-------------------------------------------------------------------------------
 # Concurrent-run guard: only one instance may run at a time.
+# LOCK_FILE can be overridden via env (useful for testing).
 #-------------------------------------------------------------------------------
-LOCK_FILE="/var/run/${SCRIPT_NAME%.*}.lock"
+LOCK_FILE="${AUTO_UPDATE_LOCK:-/var/run/${SCRIPT_NAME%.*}.lock}"
 exec 9>"$LOCK_FILE" || { echo "Error: cannot open lock file $LOCK_FILE" >&2; exit 1; }
-if ! flock -n 9; then
-  echo "Error: another instance of $SCRIPT_NAME is already running. Exiting." >&2
-  exit 1
+if command -v flock >/dev/null 2>&1; then
+  if ! flock -n 9; then
+    echo "Error: another instance of $SCRIPT_NAME is already running. Exiting." >&2
+    exit 1
+  fi
+else
+  # flock unavailable (e.g. some minimal/macOS/Git-Bash environments): degrade
+  # gracefully instead of refusing to run.
+  log_verbose "flock not available; skipping concurrent-run guard"
 fi
-
-#-------------------------------------------------------------------------------
-# Logging
-#-------------------------------------------------------------------------------
-log() {
-  local message="$1"
-  local level=${2:-"INFO"}
-  local timestamp
-  timestamp="$(date "+%Y-%m-%d %H:%M:%S")"
-
-  # Always write to the log file
-  echo "[$timestamp] $level: $message" >> "$LOG_FILE"
-
-  # If verbosity is at least 1, also output to terminal
-  if [ $VERBOSITY -ge 1 ]; then
-    echo "[$timestamp] $level: $message"
-  fi
-}
-
-# Function for verbose logging
-log_verbose() {
-  local message="$1"
-
-  if [ $VERBOSITY -ge 2 ]; then
-    log "$message" "VERBOSE"
-  elif [ $VERBOSITY -eq 1 ]; then
-    local timestamp
-    timestamp="$(date "+%Y-%m-%d %H:%M:%S")"
-    echo "[$timestamp] VERBOSE: $message"
-  fi
-}
 
 #-------------------------------------------------------------------------------
 # Email sending. Uses curl's SMTP support. Real newlines are produced with
@@ -324,9 +348,9 @@ if [ "$PKG_MANAGER" = "apt" ]; then
 
   if [ $VERBOSITY -ge 1 ]; then
     APT_UPDATE_OUTPUT="$(apt update -y 2>&1)"
+    UPDATE_RESULT=$?
     echo "$APT_UPDATE_OUTPUT"
     [ $VERBOSITY -eq 2 ] && log_verbose "apt update output: $APT_UPDATE_OUTPUT"
-    UPDATE_RESULT=$?
   else
     apt update -y >> "$LOG_FILE" 2>&1
     UPDATE_RESULT=$?
@@ -392,9 +416,9 @@ $APT_DISTUPGRADE_SIMULATION"
         log_verbose "Running: apt dist-upgrade -y -o Dpkg::Options::=\"--force-confold\""
         if [ $VERBOSITY -ge 1 ]; then
           APT_DISTUPGRADE_OUTPUT="$(apt dist-upgrade -y -o Dpkg::Options::="--force-confold" 2>&1)"
+          UPGRADE_RESULT=$?
           echo "$APT_DISTUPGRADE_OUTPUT"
           [ $VERBOSITY -eq 2 ] && log_verbose "apt dist-upgrade output: $APT_DISTUPGRADE_OUTPUT"
-          UPGRADE_RESULT=$?
         else
           apt dist-upgrade -y -o Dpkg::Options::="--force-confold" >> "$LOG_FILE" 2>&1
           UPGRADE_RESULT=$?
@@ -417,9 +441,9 @@ $APT_DISTUPGRADE_SIMULATION"
       log_verbose "Running: apt upgrade -y -o Dpkg::Options::=\"--force-confold\""
       if [ $VERBOSITY -ge 1 ]; then
         APT_UPGRADE_OUTPUT="$(apt upgrade -y -o Dpkg::Options::="--force-confold" 2>&1)"
+        UPGRADE_RESULT=$?
         echo "$APT_UPGRADE_OUTPUT"
         [ $VERBOSITY -eq 2 ] && log_verbose "apt upgrade output: $APT_UPGRADE_OUTPUT"
-        UPGRADE_RESULT=$?
       else
         apt upgrade -y -o Dpkg::Options::="--force-confold" >> "$LOG_FILE" 2>&1
         UPGRADE_RESULT=$?
@@ -445,9 +469,9 @@ elif [ "$PKG_MANAGER" = "yum" ] || [ "$PKG_MANAGER" = "dnf" ]; then
 
   if [ $VERBOSITY -ge 1 ]; then
     CHECK_UPDATE_OUTPUT="$($PKG_MANAGER check-update 2>&1)"
+    CHECK_UPDATE_RESULT=$?
     echo "$CHECK_UPDATE_OUTPUT"
     [ $VERBOSITY -eq 2 ] && log_verbose "$PKG_MANAGER check-update output: $CHECK_UPDATE_OUTPUT"
-    CHECK_UPDATE_RESULT=$?
   else
     $PKG_MANAGER check-update >> "$LOG_FILE" 2>&1
     CHECK_UPDATE_RESULT=$?
@@ -490,9 +514,9 @@ $UPGRADE_SIMULATION"
         log_verbose "Running: $PKG_MANAGER upgrade -y"
         if [ $VERBOSITY -ge 1 ]; then
           UPGRADE_OUTPUT="$($PKG_MANAGER upgrade -y 2>&1)"
+          UPGRADE_RESULT=$?
           echo "$UPGRADE_OUTPUT"
           [ $VERBOSITY -eq 2 ] && log_verbose "$PKG_MANAGER upgrade output: $UPGRADE_OUTPUT"
-          UPGRADE_RESULT=$?
         else
           $PKG_MANAGER upgrade -y >> "$LOG_FILE" 2>&1
           UPGRADE_RESULT=$?

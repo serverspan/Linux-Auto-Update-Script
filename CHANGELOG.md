@@ -12,12 +12,17 @@ All notable changes to this project are documented here.
   what changed and whether a reboot is required.
 - `--help` / `-h` flag.
 - Concurrent-run guard using `flock` so overlapping runs cannot corrupt the
-  package database.
+  package database (gracefully skips if `flock` is unavailable).
 - Reboot detection (`/var/run/reboot-required`, `needrestart`, and kernel
   version comparison on RHEL/CentOS/Fedora) with optional `AUTO_REBOOT`.
 - `NOTIFY_ON_SUCCESS` option to receive a brief "all good" report.
 - `LC_ALL=C` is now forced for all package-manager commands so output parsing is
   stable across locales.
+- Boolean config values are normalized (`true`/`false`/`1`/`0`/`yes`/`no`/`on`/
+  `off`) for reliable comparison.
+- `AUTO_UPDATE_LOCK` and `LOG_FILE` environment overrides for testing/embedded use.
+- bats test suite (`tests/`) and a GitHub Actions workflow running syntax check,
+  shellcheck, and the test suite on every push/PR.
 - `printf`-based email body generation for correct newlines.
 - Example config (`auto-update.conf.example`), systemd unit files, and an
   `install.sh` helper.
