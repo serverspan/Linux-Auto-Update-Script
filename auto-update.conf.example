@@ -1,0 +1,25 @@
+# auto-update.conf - configuration for auto-update.sh
+#
+# Place this file in the SAME directory as auto-update.sh (it is loaded
+# automatically). Copy it to auto-update.conf and edit the values.
+#
+# Environment variables override everything, then this file, then built-in
+# defaults. Keep this file readable only by root (chmod 600).
+
+# Admin email address for notifications
+ADMIN_EMAIL="admin@example.com"
+
+# SMTP server settings
+SMTP_SERVER="smtp.example.com"
+SMTP_PORT="587"
+SMTP_USER="notifications@example.com"
+SMTP_PASS="your_password_here"
+
+# Log file location
+LOG_FILE="/var/log/auto-update.log"
+
+# Behaviour
+AUTO_REBOOT="false"          # set to "true" to reboot automatically when required
+NOTIFY_ON_SUCCESS="false"    # set to "true" to email a brief "all good" report
+DRY_RUN="false"              # set to "true" to simulate only (never apply)
+MAIL_SUMMARY="false"         # set to "true" to email a full summary after success

@@ -4,7 +4,7 @@
 
 A robust BASH script that automates system updates on Linux servers while intelligently handling scenarios that require manual intervention.
 
-**Author:** ENGINYRING ([@ENGINYRING](https://github.com/ENGINYRING))
+**Author:** ENGINYRING ([@ENGINYRING](https://github.com/ENGINYRING)) — maintained fork: [@serverspan](https://github.com/serverspan)
 
 ## Features
 
@@ -15,13 +15,19 @@ A robust BASH script that automates system updates on Linux servers while intell
 - **Admin notifications**: Sends email alerts when manual intervention is required
 - **Detailed logging**: Maintains comprehensive logs of all update activities
 - **Safe operation**: Never removes packages without admin approval
+- **External configuration**: Credentials and behaviour live in `auto-update.conf` next to the script (no more editing the script itself)
+- **Concurrent-run guard**: `flock` prevents overlapping runs from corrupting the package database
+- **Reboot awareness**: Detects when a reboot is required and can reboot automatically
+- **Summary emails**: Optional reports of what changed and whether a reboot is needed
 - **Verbosity options**: Control output with verbose modes for troubleshooting
+- **Dry-run mode**: Simulate updates without applying them
 
 ## Requirements
 
 - Bash shell
 - sudo/root access
 - `curl` for sending emails
+- `flock` (usually part of `util-linux`)
 - SMTP server access for notifications
 - Compatible with:
   - Debian-based systems (Debian, Ubuntu, etc.)
@@ -29,31 +35,45 @@ A robust BASH script that automates system updates on Linux servers while intell
 
 ## Installation
 
-1. **Download the script**:
+### Quick install (recommended)
+
+The bundled `install.sh` copies the script, creates a config, and installs the
+systemd timer for you:
 
 ```bash
-curl -O https://raw.githubusercontent.com/ENGINYRING/Linux-Auto-Update-Script/main/auto-update.sh
+sudo ./install.sh
 ```
 
-2. **Make it executable**:
+Then edit `/usr/local/bin/auto-update.conf` with your SMTP settings.
+
+### Manual install
+
+1. **Download the script and config example**:
+
+```bash
+curl -O https://raw.githubusercontent.com/serverspan/Linux-Auto-Update-Script/main/auto-update.sh
+curl -O https://raw.githubusercontent.com/serverspan/Linux-Auto-Update-Script/main/auto-update.conf.example
+```
+
+2. **Make it executable and move to system path**:
 
 ```bash
 chmod +x auto-update.sh
-```
-
-3. **Move to system path**:
-
-```bash
 sudo mv auto-update.sh /usr/local/bin/auto-update.sh
 ```
 
-4. **Edit the configuration**:
+3. **Create the configuration file in the same directory**:
+
+The script automatically loads a config file named `auto-update.conf` from the
+**same directory as the script**. Copy the example and edit it:
 
 ```bash
-sudo nano /usr/local/bin/auto-update.sh
+sudo cp auto-update.conf.example /usr/local/bin/auto-update.conf
+sudo chmod 600 /usr/local/bin/auto-update.conf
+sudo nano /usr/local/bin/auto-update.conf
 ```
 
-Update the email configuration variables at the top of the script:
+Configuration options:
 
 ```bash
 ADMIN_EMAIL="admin@example.com"
@@ -61,7 +81,17 @@ SMTP_SERVER="smtp.example.com"
 SMTP_PORT="587"
 SMTP_USER="notifications@example.com"
 SMTP_PASS="your_password_here"
+
+# Behaviour
+AUTO_REBOOT="false"        # reboot automatically when required
+NOTIFY_ON_SUCCESS="false"  # email a brief "all good" report
+DRY_RUN="false"            # simulate only, never apply
+MAIL_SUMMARY="false"       # email a full summary after a successful run
 ```
+
+> **Note:** Environment variables override the config file, which overrides the
+> built-in defaults. You can also keep credentials out of any file entirely by
+> exporting them (e.g. from `/etc/environment` or a secret manager).
 
 ## Usage
 
@@ -89,90 +119,103 @@ Use the `-vv` flag for maximum verbosity (detailed terminal output and enhanced 
 sudo /usr/local/bin/auto-update.sh -vv
 ```
 
+### Dry Run
+
+Simulate everything without applying updates (useful for testing):
+
+```bash
+sudo /usr/local/bin/auto-update.sh --dry-run -v
+```
+
+### Mail a Summary After Success
+
+After a successful run, email the admin a summary of what changed and whether a
+reboot is required:
+
+```bash
+sudo /usr/local/bin/auto-update.sh --mail-summary
+```
+
+This can also be enabled permanently by setting `MAIL_SUMMARY="true"` in the
+config file.
+
+### Help
+
+```bash
+sudo /usr/local/bin/auto-update.sh --help
+```
+
 ## Setting Up Automated Runs
 
 ### Using Cron
-
-1. **Edit the crontab**:
 
 ```bash
 sudo crontab -e
 ```
 
-2. **Add a schedule** (example: run at 3 AM daily):
+Example (run at 3 AM daily):
 
 ```
 0 3 * * * /usr/local/bin/auto-update.sh
 ```
 
+To always mail a summary from cron, enable `MAIL_SUMMARY="true"` in the config
+or call the script with the flag:
+
+```
+0 3 * * * /usr/local/bin/auto-update.sh --mail-summary
+```
+
 ### Using Systemd Timer
 
-1. **Create a service file** (`/etc/systemd/system/auto-update.service`):
+If you used `install.sh`, the timer is already enabled. Otherwise:
 
-```
-[Unit]
-Description=Automatic System Update
-After=network.target
-
-[Service]
-Type=oneshot
-ExecStart=/usr/local/bin/auto-update.sh
-User=root
-
-[Install]
-WantedBy=multi-user.target
-```
-
-2. **Create a timer file** (`/etc/systemd/system/auto-update.timer`):
-
-```
-[Unit]
-Description=Run auto-update.service weekly
-
-[Timer]
-OnCalendar=Mon *-*-* 03:00:00
-RandomizedDelaySec=1800
-Persistent=true
-
-[Install]
-WantedBy=timers.target
-```
-
-3. **Enable and start the timer**:
+1. **Install the unit files** (`auto-update.service`, `auto-update.timer`) to
+   `/etc/systemd/system/`.
+2. **Enable and start the timer**:
 
 ```bash
 sudo systemctl enable auto-update.timer
 sudo systemctl start auto-update.timer
 ```
 
+The bundled `auto-update.timer` runs weekly on Mondays at 03:00 with a random
+delay.
+
 ## How It Works
 
 ### For Debian/Ubuntu Systems:
 
-1. Sets `DEBIAN_FRONTEND=noninteractive` to prevent interactive prompts
+1. Forces `LC_ALL=C` and `DEBIAN_FRONTEND=noninteractive` to prevent interactive prompts and ensure stable output parsing
 2. Updates package lists with `apt update`
 3. Simulates an upgrade with `apt upgrade --simulate` to check for:
    - Packages that would be removed
    - Packages held back
    - Other conditions requiring manual intervention
-4. If packages would be removed → Sends email notification
+4. If packages would be removed → Sends email notification and stops
 5. If packages are held back → Checks if `dist-upgrade` would remove packages
-   - If yes → Sends email notification
+   - If yes → Sends email notification and stops
    - If no → Performs `dist-upgrade` with `--force-confold` to preserve configs
 6. If no issues → Performs regular upgrade with `--force-confold`
 
 ### For RHEL/CentOS/Fedora Systems:
 
-1. Checks for updates with `yum/dnf check-update`
-2. Simulates an upgrade with `yum/dnf upgrade --assumeno` to check for:
+1. Forces `LC_ALL=C`
+2. Checks for updates with `yum/dnf check-update`
+3. Simulates an upgrade with `yum/dnf upgrade --assumeno` to check for:
    - Packages that would be removed
    - Conflicts or errors
-3. If issues found → Sends email notification
-4. If no issues → Performs upgrade
+4. If issues found → Sends email notification and stops
+5. If no issues → Performs upgrade
+
+### Reboot Handling
+
+After applying updates, the script checks whether a reboot is required
+(`/var/run/reboot-required`, `needrestart`, or a newer installed kernel on
+RHEL/CentOS/Fedora). With `AUTO_REBOOT=true` it reboots automatically; otherwise
+it logs a reminder. The reboot status is included in summary emails.
 
 ## Verbosity Levels
-
-The script supports three verbosity levels:
 
 | Mode | Flag | Description |
 |------|------|-------------|
@@ -180,15 +223,7 @@ The script supports three verbosity levels:
 | Verbose | `-v` | Prints operation details to the terminal while running |
 | Very Verbose | `-vv` | Maximum detail in terminal output and enhanced logging |
 
-Verbosity modes help with:
-- Troubleshooting email notification issues
-- Debugging package manager problems
-- Testing before setting up automated runs
-- Observing exactly what the script is doing in real-time
-
 ## Configuration Options
-
-The script has several configurable parameters at the top:
 
 | Parameter | Description |
 |-----------|-------------|
@@ -198,6 +233,13 @@ The script has several configurable parameters at the top:
 | `SMTP_USER` | Username for SMTP authentication |
 | `SMTP_PASS` | Password for SMTP authentication |
 | `LOG_FILE` | Path to the log file (default: `/var/log/auto-update.log`) |
+| `AUTO_REBOOT` | `true`/`false` — reboot automatically when required |
+| `NOTIFY_ON_SUCCESS` | `true`/`false` — email a brief "all good" report |
+| `DRY_RUN` | `true`/`false` — simulate only, never apply |
+| `MAIL_SUMMARY` | `true`/`false` — email a full summary after success |
+
+All options can also be passed as environment variables (they take precedence
+over the config file).
 
 ## Log File
 
@@ -212,15 +254,20 @@ When manual intervention is required, an email is sent with:
 - Details of packages that would be removed or other issues
 - Timestamp
 
+With `--mail-summary` (or `MAIL_SUMMARY=true`), a successful run also emails:
+
+- What packages changed
+- Whether a reboot is required
+
 ## Troubleshooting
 
 ### No Emails Being Sent
 
-1. Check SMTP configuration
+1. Check SMTP configuration in `auto-update.conf`
 2. Verify network connectivity to SMTP server
 3. Check if `curl` is installed
 4. Review logs for SMTP errors
-5. Run with `-v` flag to see detailed output
+5. Run with `-vv` flag to see detailed output
 
 ### Script Not Running from Cron
 
@@ -236,17 +283,24 @@ When manual intervention is required, an email is sent with:
 3. Check if the user running the script has sufficient permissions
 4. Run with `-vv` flag to get maximum diagnostic information
 
+### False-positive manual intervention emails (older versions)
+
+Earlier versions matched "Need to get ... of archives" as a trigger, producing
+emails on every normal upgrade. This was fixed in 1.2.0 — upgrade to avoid it.
+
 ## Security Considerations
 
-- The script contains SMTP credentials in plaintext
-- For improved security:
-  - Restrict file permissions: `chmod 700 /usr/local/bin/auto-update.sh`
-  - Consider using an external credentials file with restricted permissions
-  - Use environment variables instead of hardcoded credentials
+- The config file contains SMTP credentials — keep it at `chmod 600` and owned by root.
+- Prefer environment variables or a secret manager over a plaintext file when possible.
+- The script never removes packages automatically; it only notifies and stops.
 
 ## License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
+
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md) for a versioned history of changes.
 
 ## Contributing
 
@@ -259,7 +313,7 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 5. Submit a pull request
 
 ---
-© 2025 ENGINYRING. All rights reserved.  
+© 2025 ENGINYRING. All rights reserved.
 
 * * *
 
